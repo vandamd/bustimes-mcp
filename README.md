@@ -1,50 +1,173 @@
-# Building a Remote MCP Server on Cloudflare (Without Auth)
+# UK Bus Departures MCP Server
 
-This example allows you to deploy a remote MCP server that doesn't require authentication on Cloudflare Workers. 
+An MCP (Model Context Protocol) server that provides real-time UK bus departure information by scraping bustimes.org.
 
-## Get started: 
+## Features
 
-[![Deploy to Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/ai/tree/main/demos/remote-mcp-authless)
+- 🚌 Real-time bus departure information for UK stops
+- 🔍 ATCO code validation
+- ⚡ Built-in caching and rate limiting
+- 🌐 Cloudflare Workers compatible
+- 📊 Structured JSON responses
 
-This will deploy your MCP server to a URL like: `remote-mcp-server-authless.<your-account>.workers.dev/sse`
+## Usage
 
-Alternatively, you can use the command line below to get the remote MCP Server created on your local machine:
-```bash
-npm create cloudflare@latest -- my-mcp-server --template=cloudflare/ai/demos/remote-mcp-authless
+This MCP server provides the following tools:
+
+### `get_bus_departures`
+
+Fetches real-time bus departures for a UK bus stop.
+
+**Parameters:**
+- `stop_code` (string): UK bus stop ATCO code (e.g., '0100BRP90023')
+
+**Example:**
+```json
+{
+  "tool": "get_bus_departures",
+  "arguments": {
+    "stop_code": "0100BRP90023"
+  }
+}
 ```
 
-## Customizing your MCP Server
+**Response:**
+```json
+{
+  "departures": [
+    {
+      "service_number": "75",
+      "destination": "Hengrove Park",
+      "scheduled_time": "15:02",
+      "expected_time": "15:14"
+    }
+  ],
+  "stop_name": "Bishopston Sommerville Road (S-bound)",
+  "stop_code": "0100BRP90023",
+  "location": [-2.59102, 51.47324],
+  "last_updated": "2025-09-13T14:28:00.000Z"
+}
+```
 
-To add your own [tools](https://developers.cloudflare.com/agents/model-context-protocol/tools/) to the MCP server, define each tool inside the `init()` method of `src/index.ts` using `this.server.tool(...)`. 
+### `validate_atco_code`
 
-## Connect to Cloudflare AI Playground
+Validates an ATCO code format and returns stop metadata if valid.
 
-You can connect to your MCP server from the Cloudflare AI Playground, which is a remote MCP client:
+**Parameters:**
+- `stop_code` (string): ATCO code to validate
 
-1. Go to https://playground.ai.cloudflare.com/
-2. Enter your deployed MCP server URL (`remote-mcp-server-authless.<your-account>.workers.dev/sse`)
-3. You can now use your MCP tools directly from the playground!
+**Response:**
+```json
+{
+  "stop_code": "0100BRP90023",
+  "is_valid": true,
+  "metadata": {
+    "name": "Bishopston Sommerville Road",
+    "common_name": "Sommerville Road",
+    "long_name": "Bishopston Sommerville Road (S-bound)",
+    "location": [-2.59102, 51.47324],
+    "indicator": "S-bound",
+    "bearing": "S",
+    "active": true
+  }
+}
+```
 
-## Connect Claude Desktop to your MCP server
+## ATCO Codes
 
-You can also connect to your remote MCP server from local MCP clients, by using the [mcp-remote proxy](https://www.npmjs.com/package/mcp-remote). 
+UK bus stops use ATCO (Association of Transport Coordinating Officers) codes with the format:
+- 13 characters: `NNNNAAANNNNN[A]`
+- 4 digits + 3 letters + 5 digits + optional letter
+- Example: `0100BRP90023`
 
-To connect to your MCP server from Claude Desktop, follow [Anthropic's Quickstart](https://modelcontextprotocol.io/quickstart/user) and within Claude Desktop go to Settings > Developer > Edit Config.
+## Rate Limiting
 
-Update with this configuration:
+The server implements:
+- 2-second delay between requests to bustimes.org
+- 5-minute caching for stop metadata (departures are always fresh)
+- Respectful scraping practices
+
+## Development
+
+### Prerequisites
+- Node.js 18+
+- Wrangler CLI
+
+### Local Development
+```bash
+npm install
+npm run dev
+```
+
+### Deployment
+```bash
+npm run deploy
+```
+
+### Type Checking
+```bash
+npm run type-check
+```
+
+## API Endpoints
+
+When deployed as a Cloudflare Worker:
+
+- `GET /mcp` - MCP protocol endpoint
+- `GET /sse` - Server-Sent Events endpoint
+
+## Connect to Claude Desktop
+
+To connect this MCP server to Claude Desktop:
+
+1. Follow [Anthropic's Quickstart](https://modelcontextprotocol.io/quickstart/user)
+2. In Claude Desktop go to Settings > Developer > Edit Config
+3. Update with this configuration:
 
 ```json
 {
   "mcpServers": {
-    "calculator": {
+    "uk-bus-departures": {
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:8787/sse"  // or remote-mcp-server-authless.your-account.workers.dev/sse
+        "http://localhost:8787/sse"
       ]
     }
   }
 }
 ```
 
-Restart Claude and you should see the tools become available. 
+For deployed version, replace localhost URL with your Workers domain.
+
+## Technical Details
+
+### Data Sources
+- **bustimes.org API**: Stop metadata (names, coordinates, etc.)
+- **bustimes.org HTML**: Real-time departure information via scraping
+
+### Architecture
+- **Parser**: Robust HTML parsing with multiple fallback strategies
+- **Service**: HTTP client with rate limiting and caching
+- **Models**: Type-safe data structures using Zod schemas
+
+### Error Handling
+- Invalid ATCO codes (format validation)
+- Missing bus stops (404 responses)
+- Network timeouts and failures
+- HTML structure changes
+
+## Limitations
+
+- **UK Only**: Limited to UK bus stops with ATCO codes
+- **HTML Dependency**: Fragile to website structure changes
+- **Rate Limited**: 2-second delays between requests
+- **No Historical Data**: Real-time and scheduled data only
+
+## License
+
+MIT License
+
+## Disclaimer
+
+This server scrapes public data from bustimes.org for informational purposes. Please use responsibly and respect the website's terms of service. 

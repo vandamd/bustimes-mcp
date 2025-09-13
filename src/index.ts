@@ -1,56 +1,108 @@
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { BustimesService } from "./bustimes-service.js";
+import { GetBusDeparturesInputSchema } from "./models.js";
 
 // Define our MCP agent with tools
-export class MyMCP extends McpAgent {
+export class BustimesMCP extends McpAgent {
 	server = new McpServer({
-		name: "Authless Calculator",
+		name: "UK Bus Departures",
 		version: "1.0.0",
 	});
 
-	async init() {
-		// Simple addition tool
-		this.server.tool("add", { a: z.number(), b: z.number() }, async ({ a, b }) => ({
-			content: [{ type: "text", text: String(a + b) }],
-		}));
+	private bustimesService = new BustimesService();
 
-		// Calculator tool with multiple operations
+	async init() {
+		// Bus departures tool
 		this.server.tool(
-			"calculate",
+			"get_bus_departures",
 			{
-				operation: z.enum(["add", "subtract", "multiply", "divide"]),
-				a: z.number(),
-				b: z.number(),
+				stop_code: z.string().describe("UK bus stop ATCO code (e.g., '0100BRP90023')"),
 			},
-			async ({ operation, a, b }) => {
-				let result: number;
-				switch (operation) {
-					case "add":
-						result = a + b;
-						break;
-					case "subtract":
-						result = a - b;
-						break;
-					case "multiply":
-						result = a * b;
-						break;
-					case "divide":
-						if (b === 0)
-							return {
-								content: [
-									{
-										type: "text",
-										text: "Error: Cannot divide by zero",
-									},
-								],
-							};
-						result = a / b;
-						break;
+			async ({ stop_code }) => {
+				try {
+					const departures = await this.bustimesService.getBusDepartures(stop_code);
+					
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify(departures, null, 2),
+							},
+						],
+					};
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Error fetching bus departures: ${errorMessage}`,
+							},
+						],
+						isError: true,
+					};
 				}
-				return { content: [{ type: "text", text: String(result) }] };
 			},
 		);
+
+		// Utility tool to validate ATCO codes and get stop metadata
+		this.server.tool(
+			"validate_atco_code", 
+			{
+				stop_code: z.string().describe("ATCO code to validate"),
+			},
+			async ({ stop_code }) => {
+				const isValid = /^\d{4}[A-Z]{3}\d{5}[A-Z]?$/.test(stop_code);
+				
+				let result: any = {
+					stop_code,
+					is_valid: isValid
+				};
+				
+				// If valid, try to get stop metadata
+				if (isValid) {
+					try {
+						const url = `https://bustimes.org/api/stops/${stop_code}/`;
+						const response = await fetch(url, {
+							headers: {
+								'User-Agent': 'MCP-BusTimes-Server/1.0 (+https://github.com/user/bustimes-mcp)',
+								'Accept': 'application/json',
+							},
+						});
+						
+						if (response.ok) {
+							const metadata = await response.json();
+							result.metadata = {
+								name: metadata.name,
+								common_name: metadata.common_name,
+								long_name: metadata.long_name,
+								location: metadata.location,
+								indicator: metadata.indicator,
+								bearing: metadata.bearing,
+								active: metadata.active
+							};
+						} else {
+							result.metadata_error = `Stop not found (HTTP ${response.status})`;
+						}
+					} catch (error) {
+						result.metadata_error = `Failed to fetch metadata: ${error instanceof Error ? error.message : String(error)}`;
+					}
+				}
+				
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(result, null, 2),
+						},
+					],
+				};
+			},
+		);
+
 	}
 }
 
@@ -59,11 +111,11 @@ export default {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/sse" || url.pathname === "/sse/message") {
-			return MyMCP.serveSSE("/sse").fetch(request, env, ctx);
+			return BustimesMCP.serveSSE("/sse").fetch(request, env, ctx);
 		}
 
 		if (url.pathname === "/mcp") {
-			return MyMCP.serve("/mcp").fetch(request, env, ctx);
+			return BustimesMCP.serve("/mcp").fetch(request, env, ctx);
 		}
 
 		return new Response("Not found", { status: 404 });
