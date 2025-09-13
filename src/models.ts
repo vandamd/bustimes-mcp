@@ -40,8 +40,8 @@ export type BusDeparturesResponse = z.infer<typeof BusDeparturesResponseSchema>;
 // Input schema for the MCP tool
 export const GetBusDeparturesInputSchema = z.object({
 	stop_code: z.string()
-		.describe("UK bus stop ATCO code (e.g., '0100BRP90023')")
-		.regex(/^\d{4}[A-Z]{3}\d{5}[A-Z]?$/, "Invalid ATCO code format"),
+		.describe("UK bus stop ATCO code (e.g., '0100BRP90023' or '010000037')")
+		.regex(/^(\d{4}[A-Z]{3}\d{5}[A-Z]?|\d{9})$/, "Invalid ATCO code format"),
 });
 
 export type GetBusDeparturesInput = z.infer<typeof GetBusDeparturesInputSchema>;

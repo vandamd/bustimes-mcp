@@ -64,9 +64,13 @@ export function parseTimeString(timeStr: string): { scheduledTime: string | null
 }
 
 export function validateAtcoCode(code: string): boolean {
-	// ATCO codes are typically 13 characters: 4 digits + 3 letters + 5 digits + optional letter
-	const atcoRegex = /^\d{4}[A-Z]{3}\d{5}[A-Z]?$/;
-	return atcoRegex.test(code);
+	// ATCO codes can be either:
+	// 1. Full format: 4 digits + 3 letters + 5 digits + optional letter (e.g., 0100BRP90023)
+	// 2. Numeric format: 9 digits (e.g., 010000037)
+	const fullFormatRegex = /^\d{4}[A-Z]{3}\d{5}[A-Z]?$/;
+	const numericFormatRegex = /^\d{9}$/;
+	
+	return fullFormatRegex.test(code) || numericFormatRegex.test(code);
 }
 
 export function buildBustimesUrl(stopCode: string): string {

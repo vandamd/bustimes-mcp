@@ -68,12 +68,13 @@ export class BustimesParser {
 	private static parseRow(row: any): BusDeparture | null {
 		// Try to extract cells from the row
 		const cells = row.querySelectorAll('td, th');
-		if (cells.length < 4) {
-			return null; // Need at least 4 columns: service, destination, scheduled, expected
+		if (cells.length < 3) {
+			return null; // Need at least 3 columns: service, destination, scheduled
 		}
 		
-		// Table structure based on the HTML:
-		// [Service] [Destination] [Scheduled] [Expected]
+		// Table structure can be either:
+		// 3 columns: [Service] [Destination] [Scheduled]
+		// 4 columns: [Service] [Destination] [Scheduled] [Expected]
 		
 		// Extract service number from first cell
 		const serviceCell = cells[0];
@@ -106,10 +107,13 @@ export class BustimesParser {
 		const scheduledLink = scheduledCell.querySelector('a');
 		const scheduledText = (scheduledLink?.text || scheduledCell.text || '').trim();
 		
-		// Extract expected time from fourth cell
-		const expectedCell = cells[3];
-		const expectedLink = expectedCell.querySelector('a');
-		const expectedText = (expectedLink?.text || expectedCell.text || '').trim();
+		// Extract expected time from fourth cell (if it exists)
+		let expectedText = '';
+		if (cells.length >= 4) {
+			const expectedCell = cells[3];
+			const expectedLink = expectedCell.querySelector('a');
+			expectedText = (expectedLink?.text || expectedCell.text || '').trim();
+		}
 		
 		// Parse times
 		const scheduledTime = this.parseTimeToISO(scheduledText);

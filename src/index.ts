@@ -3,6 +3,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { BustimesService } from "./bustimes-service.js";
 import { GetBusDeparturesInputSchema } from "./models.js";
+import { validateAtcoCode } from "./utils.js";
 
 // Define our MCP agent with tools
 export class BustimesMCP extends McpAgent {
@@ -55,7 +56,7 @@ export class BustimesMCP extends McpAgent {
 				stop_code: z.string().describe("ATCO code to validate"),
 			},
 			async ({ stop_code }) => {
-				const isValid = /^\d{4}[A-Z]{3}\d{5}[A-Z]?$/.test(stop_code);
+				const isValid = validateAtcoCode(stop_code);
 				
 				let result: any = {
 					stop_code,
