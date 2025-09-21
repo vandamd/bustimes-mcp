@@ -2,7 +2,7 @@ import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { BustimesService } from "./bustimes-service.js";
-import { GetBusDeparturesInputSchema } from "./models.js";
+import { StopMetadataSchema } from "./models.js";
 import { validateAtcoCode } from "./utils.js";
 
 // Define our MCP agent with tools
@@ -19,12 +19,30 @@ export class BustimesMCP extends McpAgent {
 		this.server.tool(
 			"get_bus_departures",
 			{
-				stop_code: z.string().describe("UK bus stop ATCO code (e.g., '0100BRP90023')"),
+				stop_code: z
+					.string()
+					.describe("UK bus stop ATCO code (e.g., '0100BRP90023')"),
+				date: z
+					.string()
+					.optional()
+					.describe(
+						"Optional date in YYYY-MM-DD format (must be provided with time)",
+					),
+				time: z
+					.string()
+					.optional()
+					.describe(
+						"Optional time in HH:MM format (must be provided with date)",
+					),
 			},
-			async ({ stop_code }) => {
+			async ({ stop_code, date, time }) => {
 				try {
-					const departures = await this.bustimesService.getBusDepartures(stop_code);
-					
+					const departures = await this.bustimesService.getBusDepartures(
+						stop_code,
+						date,
+						time,
+					);
+
 					return {
 						content: [
 							{
@@ -34,8 +52,9 @@ export class BustimesMCP extends McpAgent {
 						],
 					};
 				} catch (error) {
-					const errorMessage = error instanceof Error ? error.message : String(error);
-					
+					const errorMessage =
+						error instanceof Error ? error.message : String(error);
+
 					return {
 						content: [
 							{
@@ -51,31 +70,33 @@ export class BustimesMCP extends McpAgent {
 
 		// Utility tool to validate ATCO codes and get stop metadata
 		this.server.tool(
-			"validate_atco_code", 
+			"validate_atco_code",
 			{
 				stop_code: z.string().describe("ATCO code to validate"),
 			},
 			async ({ stop_code }) => {
 				const isValid = validateAtcoCode(stop_code);
-				
-				let result: any = {
+
+				const result: any = {
 					stop_code,
-					is_valid: isValid
+					is_valid: isValid,
 				};
-				
+
 				// If valid, try to get stop metadata
 				if (isValid) {
 					try {
 						const url = `https://bustimes.org/api/stops/${stop_code}/`;
 						const response = await fetch(url, {
 							headers: {
-								'User-Agent': 'MCP-BusTimes-Server/1.0 (+https://github.com/user/bustimes-mcp)',
-								'Accept': 'application/json',
+								"User-Agent":
+									"MCP-BusTimes-Server/1.0 (+https://github.com/user/bustimes-mcp)",
+								Accept: "application/json",
 							},
 						});
-						
+
 						if (response.ok) {
-							const metadata = await response.json();
+							const data = await response.json();
+							const metadata = StopMetadataSchema.parse(data);
 							result.metadata = {
 								name: metadata.name,
 								common_name: metadata.common_name,
@@ -83,7 +104,7 @@ export class BustimesMCP extends McpAgent {
 								location: metadata.location,
 								indicator: metadata.indicator,
 								bearing: metadata.bearing,
-								active: metadata.active
+								active: metadata.active,
 							};
 						} else {
 							result.metadata_error = `Stop not found (HTTP ${response.status})`;
@@ -92,7 +113,7 @@ export class BustimesMCP extends McpAgent {
 						result.metadata_error = `Failed to fetch metadata: ${error instanceof Error ? error.message : String(error)}`;
 					}
 				}
-				
+
 				return {
 					content: [
 						{
@@ -103,7 +124,6 @@ export class BustimesMCP extends McpAgent {
 				};
 			},
 		);
-
 	}
 }
 

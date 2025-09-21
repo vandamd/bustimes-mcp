@@ -1,5 +1,5 @@
 import { parse } from "node-html-parser";
-import { BusDeparture, BusDeparturesResponse } from "./models.js";
+import type { BusDeparture, BusDeparturesResponse } from "./models.js";
 import { getCurrentDateTime } from "./utils.js";
 
 export class BustimesParser {
@@ -10,7 +10,7 @@ export class BustimesParser {
 		const root = parse(html);
 		
 		// Extract stop name from the page title or header
-		const stopName = this.extractStopName(root);
+		const stopName = BustimesParser.extractStopName(root);
 		
 		// Find the departures table
 		const departureRows = root.querySelectorAll('tbody tr, .departures-table tr, .timetable tr');
@@ -19,13 +19,12 @@ export class BustimesParser {
 		
 		for (const row of departureRows) {
 			try {
-				const departure = this.parseRow(row);
+				const departure = BustimesParser.parseRow(row);
 				if (departure) {
 					departures.push(departure);
 				}
 			} catch (error) {
 				console.warn('Failed to parse departure row:', error);
-				continue;
 			}
 		}
 		
@@ -116,8 +115,8 @@ export class BustimesParser {
 		}
 		
 		// Parse times
-		const scheduledTime = this.parseTimeToISO(scheduledText);
-		const expectedTime = this.parseTimeToISO(expectedText);
+		const scheduledTime = BustimesParser.parseTimeToISO(scheduledText);
+		const expectedTime = BustimesParser.parseTimeToISO(expectedText);
 		
 		return {
 			service_number: serviceNumber,
